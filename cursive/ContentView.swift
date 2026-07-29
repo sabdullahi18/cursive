@@ -30,13 +30,24 @@ let sampleWords: [VocabWord] = [
 enum Template {
 
     static func font(size: CGFloat) -> UIFont {
-        UIFont(name: "BadScript-Regular", size: size)
-            ?? UIFont(name: "BadScript", size: size)
-            ?? UIFont.systemFont(ofSize: size, weight: .regular)
+        let candidates = ["Russkopis-Normalny", "Russkopis", "RusskopisNormalny"]
+        for name in candidates {
+            if let f = UIFont(name: name, size: size) { return f }
+        }
+        return UIFont.systemFont(ofSize: size, weight: .regular)
     }
 
     static func path(for word: String, in rect: CGRect, padding: CGFloat = 24) -> CGPath {
-        let uiFont = font(size: 150)
+        let baseFont = font(size: 150)
+        let descriptor = baseFont.fontDescriptor.addingAttributes([
+            .featureSettings: [
+                [UIFontDescriptor.FeatureKey.type: kContextualAlternatesType,
+                 UIFontDescriptor.FeatureKey.selector: kContextualAlternatesOnSelector],
+                [UIFontDescriptor.FeatureKey.type: kLigaturesType,
+                 UIFontDescriptor.FeatureKey.selector: kCommonLigaturesOnSelector],
+            ]
+        ])
+        let uiFont = UIFont(descriptor: descriptor, size: 150)
         let attr = NSAttributedString(string: word, attributes: [.font: uiFont])
         let line = CTLineCreateWithAttributedString(attr)
         let raw = CGMutablePath()
