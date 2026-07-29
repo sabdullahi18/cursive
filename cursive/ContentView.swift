@@ -30,7 +30,9 @@ let sampleWords: [VocabWord] = [
 enum Template {
 
     static func font(size: CGFloat) -> UIFont {
-        UIFont.systemFont(ofSize: size, weight: .regular)
+        UIFont(name: "BadScript-Regular", size: size)
+            ?? UIFont(name: "BadScript", size: size)
+            ?? UIFont.systemFont(ofSize: size, weight: .regular)
     }
 
     static func path(for word: String, in rect: CGRect, padding: CGFloat = 24) -> CGPath {
@@ -42,9 +44,7 @@ enum Template {
         let runs = CTLineGetGlyphRuns(line) as! [CTRun]
         for run in runs {
             let attributes = CTRunGetAttributes(run) as! [NSAttributedString.Key: Any]
-            let runUIFont = (attributes[.font] as? UIFont) ?? uiFont
-            let ctFont = CTFontCreateWithName(runUIFont.fontName as CFString,
-                                              runUIFont.pointSize, nil)
+            let runFont = attributes[.font] as! CTFont
 
             let count = CTRunGetGlyphCount(run)
             var glyphs = [CGGlyph](repeating: 0, count: count)
@@ -53,7 +53,7 @@ enum Template {
             CTRunGetPositions(run, CFRange(location: 0, length: count), &positions)
 
             for i in 0..<count {
-                guard let gp = CTFontCreatePathForGlyph(ctFont, glyphs[i], nil) else { continue }
+                guard let gp = CTFontCreatePathForGlyph(runFont, glyphs[i], nil) else { continue }
                 let move = CGAffineTransform(translationX: positions[i].x, y: positions[i].y)
                 raw.addPath(gp, transform: move)
             }
