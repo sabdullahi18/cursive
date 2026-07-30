@@ -102,7 +102,12 @@ enum Template {
 
         let availW = rect.width  - 2 * padding
         let availH = rect.height - 2 * padding
-        let s = min(availW / box.width, availH / box.height)
+
+        let targetHeight = availH * 0.7
+        var s = targetHeight / uiFont.lineHeight
+        if box.width  * s > availW { s = availW / box.width }
+        if box.height * s > availH { s = availH / box.height }
+
         let offsetX = (availW - box.width  * s) / 2
         let offsetY = (availH - box.height * s) / 2
 
