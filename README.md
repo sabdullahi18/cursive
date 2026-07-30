@@ -1,5 +1,5 @@
 # cursive
-iOS app to practice russian cursive handwriting cos mine is ass
+iOS app to practice russian cursive handwriting
 
 
 ## Usage
