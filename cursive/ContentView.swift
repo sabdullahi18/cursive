@@ -11,29 +11,56 @@ import CoreText
 
 // MARK: - Vocab model
 
-struct VocabWord: Identifiable {
-    let id = UUID()
+struct VocabWord: Identifiable, Decodable {
+    var id: String { russian }
     let russian: String
     let english: String
+    let pos: String
 }
 
-let sampleWords: [VocabWord] = [
-    .init(russian: "привет",  english: "hello"),
-    .init(russian: "спасибо", english: "thank you"),
-    .init(russian: "вода",    english: "water"),
-    .init(russian: "книга",   english: "book"),
-    .init(russian: "друг",    english: "friend"),
-]
+enum Vocab {
+    static let all: [VocabWord] = {
+        if let url = Bundle.main.url(forResource: "words", withExtension: "json"),
+           let data = try? Data(contentsOf: url),
+           let words = try? JSONDecoder().decode([VocabWord].self, from: data),
+           !words.isEmpty {
+            print("Loaded \(words.count) words from words.json")
+            return words
+        }
+        print("words.json not found — using built-in fallback")
+        return fallback
+    }()
+
+    static let fallback: [VocabWord] = [
+        .init(russian: "привет",  english: "hello",     pos: "noun"),
+        .init(russian: "спасибо", english: "thank you", pos: "noun"),
+        .init(russian: "вода",    english: "water",     pos: "noun"),
+        .init(russian: "книга",   english: "book",      pos: "noun"),
+        .init(russian: "друг",    english: "friend",    pos: "noun"),
+    ]
+}
 
 // MARK: - Glyph template (font -> fitted CGPath)
 
 enum Template {
 
-    static func font(size: CGFloat) -> UIFont {
-        let candidates = ["Russkopis-Normalny", "Russkopis", "RusskopisNormalny"]
-        for name in candidates {
-            if let f = UIFont(name: name, size: size) { return f }
+    /// The font used to render the tracing outline: "Russkopis", a free,
+    /// X11/MIT-licensed Cyrillic cursive font (github.com/MihailJP/Russkopis).
+    static let cursiveFontName: String? = {
+        for ext in ["otf", "ttf"] {
+            guard let url = Bundle.main.url(forResource: "Russkopis-Normalny", withExtension: ext),
+                  let provider = CGDataProvider(url: url as CFURL),
+                  let cg = CGFont(provider) else { continue }
+            let name = cg.postScriptName as String?
+            print("Loaded Russkopis-Normalny.\(ext) — PostScript name:", name ?? "nil")
+            return name
         }
+        print("Russkopis-Normalny.otf/.ttf not found in the app bundle")
+        return nil
+    }()
+
+    static func font(size: CGFloat) -> UIFont {
+        if let name = cursiveFontName, let f = UIFont(name: name, size: size) { return f }
         return UIFont.systemFont(ofSize: size, weight: .regular)
     }
 
@@ -185,7 +212,7 @@ struct PencilCanvas: UIViewRepresentable {
 
 struct ContentView: View {
     @State private var canvas = PKCanvasView()
-    @State private var words = sampleWords
+    @State private var words = Vocab.all
     @State private var index = 0
     @State private var showOutline = true
     @State private var result: ScoreResult?
