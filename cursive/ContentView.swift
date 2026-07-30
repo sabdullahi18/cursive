@@ -16,27 +16,61 @@ struct VocabWord: Identifiable, Decodable {
     let russian: String
     let english: String
     let pos: String
+    let rank: Int
+    let categories: [String]
+
+    init(russian: String, english: String, pos: String,
+         rank: Int = 0, categories: [String] = []) {
+        self.russian = russian; self.english = english; self.pos = pos
+        self.rank = rank; self.categories = categories
+    }
+
+    enum CodingKeys: String, CodingKey { case russian, english, pos, rank, categories }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        russian    = try c.decode(String.self, forKey: .russian)
+        english    = try c.decode(String.self, forKey: .english)
+        pos        = (try? c.decode(String.self, forKey: .pos)) ?? "other"
+        rank       = (try? c.decode(Int.self, forKey: .rank)) ?? Int.max
+        categories = (try? c.decode([String].self, forKey: .categories)) ?? []
+    }
 }
 
 enum Vocab {
-    static let all: [VocabWord] = {
-        if let url = Bundle.main.url(forResource: "words", withExtension: "json"),
-           let data = try? Data(contentsOf: url),
-           let words = try? JSONDecoder().decode([VocabWord].self, from: data),
-           !words.isEmpty {
-            print("Loaded \(words.count) words from words.json")
-            return words
+    static let all: [VocabWord] = load("words") ?? fallback
+    static let fullDictionary: [VocabWord] = load("alldict") ?? []
+
+    private static func load(_ name: String) -> [VocabWord]? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let words = try? JSONDecoder().decode([VocabWord].self, from: data),
+              !words.isEmpty else { return nil }
+        print("Loaded \(words.count) words from \(name).json")
+        return words
+    }
+
+    static var allByRank: [VocabWord] { all.sorted { $0.rank < $1.rank } }
+
+    static let modules: [(name: String, words: [VocabWord])] = {
+        var map: [String: [VocabWord]] = [:]
+        for w in all {
+            for c in w.categories { map[c, default: []].append(w) }
         }
-        print("words.json not found — using built-in fallback")
-        return fallback
+        let order = ["numbers", "colors", "family", "people", "body", "food", "fruit",
+                     "vegetable", "drink", "animals", "nature", "weather", "time",
+                     "home", "clothing", "places", "travel", "school", "verbs", "adjectives"]
+        func priority(_ name: String) -> Int { order.firstIndex(of: name) ?? order.count }
+        return map
+            .map { (name: $0.key, words: $0.value.sorted { $0.rank < $1.rank }) }
+            .sorted { (priority($0.name), $0.name) < (priority($1.name), $1.name) }
     }()
 
     static let fallback: [VocabWord] = [
-        .init(russian: "привет",  english: "hello",     pos: "noun"),
-        .init(russian: "спасибо", english: "thank you", pos: "noun"),
-        .init(russian: "вода",    english: "water",     pos: "noun"),
-        .init(russian: "книга",   english: "book",      pos: "noun"),
-        .init(russian: "друг",    english: "friend",    pos: "noun"),
+        .init(russian: "привет",  english: "hello",     pos: "noun", categories: ["basics"]),
+        .init(russian: "спасибо", english: "thank you", pos: "noun", categories: ["basics"]),
+        .init(russian: "вода",    english: "water",     pos: "noun", categories: ["basics"]),
+        .init(russian: "книга",   english: "book",      pos: "noun", categories: ["basics"]),
+        .init(russian: "друг",    english: "friend",    pos: "noun", categories: ["basics"]),
     ]
 }
 
@@ -213,11 +247,54 @@ struct PencilCanvas: UIViewRepresentable {
     func updateUIView(_ uiView: PKCanvasView, context: Context) {}
 }
 
-// MARK: - Main view
+// MARK: - Main menu (module selection)
 
 struct ContentView: View {
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    NavigationLink {
+                        PracticeView(title: "All words", words: Vocab.allByRank)
+                    } label: {
+                        Label("All words", systemImage: "square.grid.2x2")
+                    }
+                    if !Vocab.fullDictionary.isEmpty {
+                        NavigationLink {
+                            PracticeView(title: "Full dictionary", words: Vocab.fullDictionary)
+                        } label: {
+                            Label("Full dictionary (A–Z)", systemImage: "character.book.closed")
+                        }
+                    }
+                }
+
+                Section("Modules") {
+                    ForEach(Vocab.modules, id: \.name) { module in
+                        NavigationLink {
+                            PracticeView(title: module.name.capitalized, words: module.words)
+                        } label: {
+                            HStack {
+                                Text(module.name.capitalized)
+                                Spacer()
+                                Text("\(module.words.count)")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Cursive")
+        }
+    }
+}
+
+// MARK: - Practice view (the tracing screen for one word list)
+
+struct PracticeView: View {
+    let title: String
+    let words: [VocabWord]
+
     @State private var canvas = PKCanvasView()
-    @State private var words = Vocab.all.shuffled()
     @State private var index = 0
     @State private var showOutline = true
     @State private var result: ScoreResult?
@@ -226,6 +303,18 @@ struct ContentView: View {
     private var word: VocabWord { words[index] }
 
     var body: some View {
+        Group {
+            if words.isEmpty {
+                Text("No words in this module.").foregroundStyle(.secondary)
+            } else {
+                practice
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var practice: some View {
         VStack(spacing: 20) {
             VStack(spacing: 4) {
                 Text(word.english)
