@@ -217,7 +217,7 @@ struct PencilCanvas: UIViewRepresentable {
 
 struct ContentView: View {
     @State private var canvas = PKCanvasView()
-    @State private var words = Vocab.all
+    @State private var words = Vocab.all.shuffled()
     @State private var index = 0
     @State private var showOutline = true
     @State private var result: ScoreResult?
